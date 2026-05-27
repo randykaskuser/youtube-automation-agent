@@ -1,5 +1,6 @@
 const { google } = require('googleapis');
 const fs = require('fs').promises;
+const standardFs = require('fs');
 const path = require('path');
 const { Logger } = require('../utils/logger');
 
@@ -183,16 +184,23 @@ class PublishingSchedulingAgent {
   }
 
   async getVideoStream(videoPath) {
-    const standardFs = require('fs');
-    if (videoPath && standardFs.existsSync(videoPath) && videoPath.endsWith('.mp4')) {
-      this.logger.info(`Creating real file read stream for video upload: ${videoPath}`);
-      return standardFs.createReadStream(videoPath);
+    // Validate the video path to prevent path traversal
+    const basePath = path.resolve(path.join(__dirname, '..'));
+    const resolvedPath = path.resolve(path.normalize(videoPath || ''));
+    if (!resolvedPath.startsWith(basePath)) {
+      this.logger.error(`Path traversal attempt blocked: ${videoPath}`);
+      throw new Error('Invalid video path');
+    }
+
+    if (resolvedPath && standardFs.existsSync(resolvedPath) && resolvedPath.endsWith('.mp4')) {
+      this.logger.info(`Creating real file read stream for video upload: ${resolvedPath}`);
+      return standardFs.createReadStream(resolvedPath);
     }
     
     // Fallback simulation
     return JSON.stringify({
       message: 'Video stream would be provided here',
-      path: videoPath,
+      path: resolvedPath,
       timestamp: new Date().toISOString()
     });
   }

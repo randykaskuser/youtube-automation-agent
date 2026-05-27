@@ -16,7 +16,10 @@ class ScriptWriterAgent {
     if (geminiKey) {
       try {
         const genAI = new GoogleGenerativeAI(geminiKey);
-        this.gemini = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+        this.gemini = genAI.getGenerativeModel({
+          model: 'gemini-2.5-flash',
+          systemInstruction: 'You are an expert Indonesian children\'s fairy tale writer. You create wholesome, safe, educational stories for kids aged 3-8 in Bahasa Indonesia. Always produce valid JSON output only. Never include violent, scary, or inappropriate content.'
+        });
         this.logger.info('Google Gemini service initialized for ScriptWriter');
       } catch (error) {
         this.logger.error('Failed to initialize Google Gemini for ScriptWriter:', error);
@@ -63,7 +66,9 @@ class ScriptWriterAgent {
     try {
       this.logger.info(`Generating script for: ${strategy.topic}`);
       
-      const template = this.templates[strategy.contentType.toLowerCase()] || this.templates.explainer;
+      const contentTypeKey = strategy.contentType.toLowerCase();
+      const allowedTypes = Object.keys(this.templates);
+      const template = allowedTypes.includes(contentTypeKey) ? this.templates[contentTypeKey] : this.templates.explainer;
       
       let hook, introduction, mainContent, conclusion, cta, title;
       let generatedViaGemini = false;
@@ -319,7 +324,7 @@ Provide the output in valid, raw JSON format (no markdown, no code blocks):
       'Story': `the incredible journey of ${strategy.topic}`
     };
     
-    return propositions[strategy.contentType] || `everything about ${strategy.topic}`;
+    return Object.prototype.hasOwnProperty.call(propositions, strategy.contentType) ? propositions[strategy.contentType] : `everything about ${strategy.topic}`;
   }
 
   getCredibilityStatement(strategy) {
@@ -363,7 +368,7 @@ Provide the output in valid, raw JSON format (no markdown, no code blocks):
       implications: () => this.generateImplications(strategy)
     };
 
-    const generator = sectionGenerators[sectionType];
+    const generator = Object.prototype.hasOwnProperty.call(sectionGenerators, sectionType) ? sectionGenerators[sectionType] : null;
     
     if (generator) {
       return await generator();

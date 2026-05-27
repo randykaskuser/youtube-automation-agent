@@ -125,7 +125,7 @@ class ContentStrategyAgent {
       return { topTopics: [], avgViews: 0, frequency: 0 };
     }
 
-    const topics = {};
+    const topics = new Map();
     let totalViews = 0;
 
     videos.forEach(video => {
@@ -136,13 +136,14 @@ class ContentStrategyAgent {
       // Extract topics from title
       const keywords = this.extractKeywords(title);
       keywords.forEach(keyword => {
-        if (!topics[keyword]) topics[keyword] = { count: 0, views: 0 };
-        topics[keyword].count++;
-        topics[keyword].views += views;
+        if (!topics.has(keyword)) topics.set(keyword, { count: 0, views: 0 });
+        const entry = topics.get(keyword);
+        entry.count++;
+        entry.views += views;
       });
     });
 
-    const topTopics = Object.entries(topics)
+    const topTopics = Array.from(topics.entries())
       .sort((a, b) => b[1].views - a[1].views)
       .slice(0, 10)
       .map(([topic, data]) => ({ topic, avgViews: data.views / data.count }));

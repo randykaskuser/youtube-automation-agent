@@ -219,7 +219,7 @@ class SEOOptimizerAgent {
       'Story': ['story', 'journey', 'experience', 'case study']
     };
     
-    const typeTags = contentTypeTags[strategy.contentType] || [];
+    const typeTags = Object.prototype.hasOwnProperty.call(contentTypeTags, strategy.contentType) ? contentTypeTags[strategy.contentType] : [];
     typeTags.forEach(tag => tags.add(tag));
     
     // Add year tags
@@ -298,7 +298,7 @@ class SEOOptimizerAgent {
       'general': ['video', 'youtube', 'content', 'new', 'latest']
     };
     
-    return nicheTags[niche] || nicheTags.general;
+    return Object.prototype.hasOwnProperty.call(nicheTags, niche) ? nicheTags[niche] : nicheTags.general;
   }
 
   generateLongTailKeywords(strategy) {
@@ -500,7 +500,7 @@ class SEOOptimizerAgent {
       'Story': '10-20 minutes'
     };
     
-    return optimalLengths[contentType] || '8-12 minutes';
+    return Object.prototype.hasOwnProperty.call(optimalLengths, contentType) ? optimalLengths[contentType] : '8-12 minutes';
   }
 
   selectCategory(strategy) {

@@ -1,4 +1,6 @@
 const cron = require('node-cron');
+const fs = require('fs').promises;
+const path = require('path');
 const { Logger } = require('../utils/logger');
 
 class DailyAutomation {
@@ -412,8 +414,6 @@ class DailyAutomation {
 
   async cleanupOldFiles() {
     // Clean up temporary files older than 7 days
-    const fs = require('fs').promises;
-    const path = require('path');
     
     const tempDir = path.join(__dirname, '..', 'temp');
     const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -428,8 +428,6 @@ class DailyAutomation {
   }
 
   async cleanDirectoryOldFiles(directory, days) {
-    const fs = require('fs').promises;
-    const path = require('path');
     
     try {
       const files = await fs.readdir(directory);
@@ -503,7 +501,9 @@ class DailyAutomation {
 
     // Check scheduled tasks
     this.scheduledTasks.forEach((task, name) => {
-      health.scheduledTasks[name] = task.running;
+      if (Object.prototype.hasOwnProperty.call(health.scheduledTasks, name) || !(name in Object.prototype)) {
+        health.scheduledTasks[name] = task.running;
+      }
     });
 
     // Get system resources (simplified)

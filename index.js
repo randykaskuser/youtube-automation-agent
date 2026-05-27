@@ -387,7 +387,7 @@ class YouTubeAutomationAgent {
       this.generationStatus.status = 'failed';
       this.generationStatus.currentStep = 'Failed during: ' + this.generationStatus.currentStep;
       for (const [key, val] of Object.entries(this.generationStatus.steps)) {
-        if (val === 'processing') {
+        if (val === 'processing' && Object.prototype.hasOwnProperty.call(this.generationStatus.steps, key)) {
           this.generationStatus.steps[key] = 'failed';
         }
       }

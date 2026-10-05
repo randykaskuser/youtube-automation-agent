@@ -67,6 +67,13 @@ class AIVideoGenerator {
     this.elevenLabsVoiceId = resolvedCredentials.elevenLabs?.voiceId || process.env.ELEVENLABS_VOICE_ID;
     this.elevenLabsModel = process.env.ELEVENLABS_TTS_MODEL || 'eleven_v3';
 
+    // Preferred TTS provider/voice from the dashboard (credentials.tts) or the environment
+    const ttsConfig = resolvedCredentials.tts || {};
+    this.ttsProvider = ttsConfig.provider || process.env.TTS_PROVIDER || 'edge_tts';
+    this.ttsVoice = ttsConfig.voice || process.env.TTS_VOICE || null;
+    this.localTtsUrl = ttsConfig.localUrl || process.env.LOCAL_TTS_URL || '';
+    this.openaiModel = ttsConfig.openaiModel || 'gpt-4o-mini-tts';
+
     // Azure Speech configuration
     this.azureSpeechKey = resolvedCredentials.azure?.speechKey || process.env.AZURE_SPEECH_KEY;
     this.azureSpeechRegion = resolvedCredentials.azure?.speechRegion || process.env.AZURE_SPEECH_REGION;
@@ -91,7 +98,11 @@ class AIVideoGenerator {
     if (this.gemini) {
       attempts.push({ provider: 'gemini', model: process.env.GEMINI_TTS_MODEL || 'gemini-3.1-flash-tts-preview', run: () => this.generateGeminiTTS(text, outputPath) });
     }
-    attempts.push({ provider: 'msedge', model: process.env.EDGE_TTS_VOICE || 'id-ID-GadisNeural', run: () => this.generateMsEdgeTTS(text, outputPath) });
+    attempts.push({ provider: 'msedge', model: this.getEdgeVoice(), run: () => this.generateMsEdgeTTS(text, outputPath) });
+
+    // The configured provider (TTS_PROVIDER / dashboard) goes first; the rest stay as fallbacks
+    const preferred = this.ttsProvider === 'edge_tts' ? 'msedge' : this.ttsProvider;
+    attempts.sort((a, b) => (b.provider === preferred) - (a.provider === preferred));
 
     let lastError = null;
     let lastAttempt = null;
@@ -128,6 +139,26 @@ class AIVideoGenerator {
     throw lastError || new Error('No TTS provider succeeded');
   }
 
+  // TTS_VOICE may hold an OpenAI voice name, so only Edge-style names (xx-XX-NameNeural) apply here
+  getEdgeVoice() {
+    if (process.env.EDGE_TTS_VOICE) return process.env.EDGE_TTS_VOICE;
+    if (this.ttsVoice && /^[a-z]{2,3}-[A-Z]{2}-\w+Neural$/.test(this.ttsVoice)) return this.ttsVoice;
+    return 'id-ID-GadisNeural';
+  }
+
+  getTTSProviderInfo() {
+    return {
+      provider: this.ttsProvider,
+      voice: this.ttsProvider === 'edge_tts' ? this.getEdgeVoice() : this.ttsVoice,
+      localUrl: this.localTtsUrl,
+      openaiModel: this.openaiModel,
+      hasOpenAIKey: !!this.openai,
+      hasElevenLabsKey: !!this.elevenLabsApiKey,
+      elevenLabsVoiceId: this.elevenLabsVoiceId || '',
+      elevenLabsModel: this.elevenLabsModel
+    };
+  }
+
   async generateMsEdgeTTS(text, outputPath) {
     this.logger.info('Generating free Microsoft Edge Neural TTS audio...');
 
@@ -136,7 +167,7 @@ class AIVideoGenerator {
       try {
         const tts = new MsEdgeTTS();
         const format = OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3 || "audio-24khz-96kbitrate-mono-mp3";
-        await tts.setMetadata(process.env.EDGE_TTS_VOICE || "id-ID-GadisNeural", format);
+        await tts.setMetadata(this.getEdgeVoice(), format);
 
         await fs.mkdir(path.dirname(outputPath), { recursive: true });
         const fileStream = standardFs.createWriteStream(outputPath);

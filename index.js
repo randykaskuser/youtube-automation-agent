@@ -430,7 +430,10 @@ class YouTubeAutomationAgent {
   setupAPI() {
     this.app.use(express.json({ limit: '1mb' }));
     this.app.use(express.static(path.join(__dirname, 'dashboard')));
-    this.app.use('/data', express.static(path.join(__dirname, 'data')));
+    // Serve only generated media; data/ also holds the SQLite database and pipeline state
+    for (const dir of ['videos', 'assets', 'audio', 'captions', 'thumbnails']) {
+      this.app.use(`/data/${dir}`, express.static(path.join(__dirname, 'data', dir)));
+    }
     this.app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
     if (!process.env.API_KEY) {
@@ -796,7 +799,7 @@ class YouTubeAutomationAgent {
         }
         if (elevenLabsApiKey !== undefined) vg.elevenLabsApiKey = elevenLabsApiKey;
         if (elevenLabsVoiceId !== undefined) vg.elevenLabsVoiceId = elevenLabsVoiceId;
-        if (elevenLabsModel !== undefined) vg.elevenLabsModelId = elevenLabsModel;
+        if (elevenLabsModel !== undefined) vg.elevenLabsModel = elevenLabsModel;
 
         this.logger.info(`TTS config updated: provider=${provider || vg.ttsProvider}, voice=${voice || vg.ttsVoice}`);
         res.json({ success: true, config: vg.getTTSProviderInfo() });

@@ -76,6 +76,7 @@ CRITICAL RULES:
 2. The title MUST be natural Bahasa Indonesia, like a real dongeng title.
 3. DO NOT add years or words like "Resmi", "Ultimate", "Terbaik".
 ${strategy.videoType === 'short' ? '4. THIS IS A YOUTUBE SHORT. Keep the outline EXTREMELY concise. Maximum 1-2 very short chapters.' : ''}
+${this.getLengthRule(strategy, 'outline')}
 
 Provide the output in valid JSON format:
 {
@@ -87,6 +88,22 @@ Provide the output in valid JSON format:
   "moralLesson": "Pesan moral cerita"
 }`;
     return this.executeLLM(prompt, true);
+  }
+
+  // Narration target for the requested length (the dashboard's Short/Medium/Long choice).
+  // Shorts (videoType 'short') keep their own 60-second rule.
+  getLengthRule(strategy, stage) {
+    if (strategy.videoType === 'short') return '';
+    const plans = {
+      short: { minutes: '2-4', chapters: '4', words: '220-350' },
+      medium: { minutes: '8-12', chapters: '10-14', words: '1000-1500' },
+      long: { minutes: '15-20', chapters: '18-24', words: '1900-2600' }
+    };
+    const plan = plans[strategy.requestedLengthKey];
+    if (!plan) return '';
+    return stage === 'outline'
+      ? `LENGTH RULE: The video must be ${plan.minutes} minutes long. Use exactly ${plan.chapters} chapters.`
+      : `LENGTH RULE: The video must be ${plan.minutes} minutes long when read aloud. The whole draft must be ${plan.words} words in total, spread across one section per chapter.`;
   }
 
   async executeLLM(prompt, isJson = false) {
@@ -107,6 +124,7 @@ Video Type: ${strategy.videoType || 'long'}
 
 CRITICAL RULE: ALL DIALOGUE AND NARRATION MUST BE IN BAHASA INDONESIA.
 ${strategy.videoType === 'short' ? 'CRITICAL SHORTS RULE: This is a YouTube Short! The ENTIRE draft must be MAX 150 words. It must take LESS THAN 60 SECONDS to read aloud. Keep sentences punchy and action-packed.' : ''}
+${this.getLengthRule(strategy, 'draft')}
 
 Provide the output in valid JSON format:
 {
@@ -130,7 +148,8 @@ Draft: ${JSON.stringify(draft)}
 
 CRITICAL RULES:
 1. ALL TEXT MUST BE IN BAHASA INDONESIA. Do not use English.
-2. Give every section 1-3 English sound-effect keywords in "sfx_keywords" (for example "magic", "wind", "laugh", "birds", "footsteps"); they are used to look up sound files.
+2. Keep the same number of sections and roughly the same length as the draft; do not shorten or pad it.
+3. Give every section 1-3 English sound-effect keywords in "sfx_keywords" (for example "magic", "wind", "laugh", "birds", "footsteps"); they are used to look up sound files.
 
 Provide the final output in valid JSON format EXACTLY matching this structure:
 {

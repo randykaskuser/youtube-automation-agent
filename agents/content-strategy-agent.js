@@ -2,6 +2,11 @@ const { Logger } = require('../utils/logger');
 const { LLMClient } = require('../utils/llm-client');
 const { AITextService } = require('../utils/ai-text-service');
 
+// Story language comes from CONTENT_LANGUAGE (default Indonesian), not from the YouTube region
+function isIndonesianContent() {
+  return (process.env.CONTENT_LANGUAGE || 'id').toLowerCase().startsWith('id');
+}
+
 class ContentStrategyAgent {
   constructor(db, credentials) {
     this.db = db;
@@ -103,7 +108,7 @@ class ContentStrategyAgent {
     const region = process.env.YOUTUBE_REGION || 'ID';
     
     // Niche search queries for target children's bedtime stories & fairy tales
-    const searchQuery = region === 'ID' 
+    const searchQuery = isIndonesianContent() 
       ? 'dongeng anak OR cerita anak OR cerita tidur OR fabel anak' 
       : 'bedtime stories for kids OR fairy tales for children OR kids stories';
       
@@ -574,7 +579,7 @@ Trending topics available: ${trendingTopics || 'Technology Trends'}
 Channel target audience: ${process.env.TARGET_AUDIENCE || 'General audience interested in educational content'}
 Top performing topics from past analytics (prefer topics related to these): ${(analyticsData.topTopics || []).join(', ') || 'none yet'}
 Recent topics to avoid repeating: ${(this.historicalPerformance ? this.getRecentTopics() : []).slice(0, 20).join(', ') || 'none'}
-${(process.env.YOUTUBE_REGION || 'ID') === 'ID'
+${isIndonesianContent()
     ? `This is an Indonesian children's storytelling channel (dongeng anak, ages 3-8). Write topic, angle, targetAudience, and keywords in Bahasa Indonesia, use contentType "Story", and keep the topic a natural dongeng-style subject. Do not add years or words like "Resmi", "Ultimate", "Terbaik".`
     : ''}
 Avoid fabricated claims and unsupported numbers.`;
@@ -675,8 +680,7 @@ Avoid fabricated claims and unsupported numbers.`;
   }
 
   getEvergreenFallbackTopics() {
-    const region = process.env.YOUTUBE_REGION || 'ID';
-    if (region === 'ID') {
+    if (isIndonesianContent()) {
       // Fallback pool: Indonesian children's story characters & themes
       return [
         'Kelinci Putih yang Jujur',

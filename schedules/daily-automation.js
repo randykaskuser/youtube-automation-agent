@@ -124,7 +124,8 @@ class DailyAutomation {
       }
 
       if (this.generateContent) {
-        const job = await this.generateContent({ source: 'scheduler' });
+        // Short (2-4 min) matches the story length the channel has been publishing
+        const job = await this.generateContent({ source: 'scheduler', length: process.env.DEFAULT_LENGTH || 'short' });
         await this.db.setSetting('last_content_generation', new Date().toISOString());
         timer.end();
         this.logger.success(`Daily content generation queued: ${job.id}`);

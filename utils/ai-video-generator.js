@@ -98,7 +98,7 @@ class AIVideoGenerator {
     if (this.gemini) {
       attempts.push({ provider: 'gemini', model: process.env.GEMINI_TTS_MODEL || 'gemini-3.1-flash-tts-preview', run: () => this.generateGeminiTTS(text, outputPath) });
     }
-    attempts.push({ provider: 'msedge', model: this.getEdgeVoice(), run: () => this.generateMsEdgeTTS(text, outputPath) });
+    attempts.push({ provider: 'msedge', model: this.getEdgeVoice(), run: () => this.generateMsEdgeTTSWithRetry(text, outputPath) });
 
     // The configured provider (TTS_PROVIDER / dashboard) goes first; the rest stay as fallbacks
     const preferred = this.ttsProvider === 'edge_tts' ? 'msedge' : this.ttsProvider;
@@ -157,6 +157,23 @@ class AIVideoGenerator {
       elevenLabsVoiceId: this.elevenLabsVoiceId || '',
       elevenLabsModel: this.elevenLabsModel
     };
+  }
+
+  // The Edge TTS websocket sometimes closes before "turn.end"; a fresh connection usually succeeds
+  async generateMsEdgeTTSWithRetry(text, outputPath, attempts = 3) {
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        return await this.generateMsEdgeTTS(text, outputPath);
+      } catch (error) {
+        lastError = error;
+        if (attempt < attempts) {
+          this.logger.warn(`Edge TTS attempt ${attempt} failed (${error.message}); retrying...`);
+          await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
+        }
+      }
+    }
+    throw lastError;
   }
 
   async generateMsEdgeTTS(text, outputPath) {
@@ -768,7 +785,7 @@ class AIVideoGenerator {
     const totalFrames = Math.max(1, Math.ceil(slideDuration * fps));
     return [
       '-y', '-loop', '1', '-i', imagePath,
-      '-vf', `scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2,zoompan=z='min(zoom+0.001,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${totalFrames}:s=${targetW}x${targetH}:fps=${fps}`,
+      '-vf', `scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2,zoompan=z='min(zoom+0.001,1.08)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=${totalFrames}:s=${targetW}x${targetH}:fps=${fps},scale=out_range=tv,format=yuv420p`,
       '-t', slideDuration.toFixed(2), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-preset', 'fast', '-r', String(fps), clipPath
     ];
   }
@@ -937,7 +954,7 @@ class AIVideoGenerator {
       this.logger.info(`Mixing audio with ${hasBgm ? 'BGM' : 'no BGM'} and ${sfxInputs.length} SFX tracks`);
       if (mixCount > 0) {
         filterComplex += `${amixInputs}amix=inputs=${mixCount}:duration=first:dropout_transition=2[a]`;
-        await runFFmpeg(['-y', ...inputs, '-filter_complex', filterComplex, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', outputPath]);
+        await runFFmpeg(['-y', ...inputs, '-filter_complex', filterComplex, '-map', '0:v', '-map', '[a]', '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-movflags', '+faststart', outputPath]);
       } else {
         // Completely silent video
         await fs.copyFile(silentVideoPath, outputPath);
@@ -993,7 +1010,7 @@ class AIVideoGenerator {
     await runFFmpeg(['-y', '-f', 'concat', '-safe', '0', '-i', concatListPath, '-c', 'copy', silentPath]);
 
     if (await this.isUsableAudioFile(audioPath)) {
-      await runFFmpeg(['-y', '-i', silentPath, '-i', audioPath, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-shortest', outputPath]);
+      await runFFmpeg(['-y', '-i', silentPath, '-i', audioPath, '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-movflags', '+faststart', outputPath]);
     } else {
       await fs.copyFile(silentPath, outputPath);
     }

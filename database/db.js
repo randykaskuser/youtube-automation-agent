@@ -1,4 +1,5 @@
-const sqlite3 = require('sqlite3').verbose();
+// Built-in driver (Node >= 22.13), replaces the native sqlite3 package.
+const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 const fs = require('fs').promises;
 const { Logger } = require('../utils/logger');
@@ -18,7 +19,11 @@ class Database {
       await fs.mkdir(path.dirname(this.dbPath), { recursive: true });
       
       // Connect to database
-      this.db = new sqlite3.Database(this.dbPath);
+      // Match the old sqlite3 defaults: foreign keys not enforced, "double-quoted" strings allowed.
+      this.db = new DatabaseSync(this.dbPath, {
+        enableForeignKeyConstraints: false,
+        enableDoubleQuotedStringLiterals: true
+      });
       
       // Create tables
       await this.createTables();
@@ -2871,52 +2876,49 @@ class Database {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
   }
 
+  // node:sqlite only binds null, numbers, bigints, strings and buffers.
+  // Convert the other values the old sqlite3 driver accepted the same way it did.
+  static toSqlValue(value) {
+    if (value === undefined || value === null) return null;
+    if (typeof value === 'boolean') return value ? 1 : 0;
+    if (value instanceof Date) return value.getTime();
+    return value;
+  }
+
+  bindArgs(params) {
+    if (params === undefined || params === null) return [];
+    if (Array.isArray(params)) return params.map(Database.toSqlValue);
+    if (typeof params === 'object' && !Buffer.isBuffer(params)) {
+      const named = {};
+      for (const [key, value] of Object.entries(params)) named[key] = Database.toSqlValue(value);
+      return [named];
+    }
+    return [Database.toSqlValue(params)];
+  }
+
   async executeQuery(query, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.run(query, params, function(error) {
-        if (error) {
-          reject(error);
-        } else {
-          resolve({ lastID: this.lastID, changes: this.changes });
-        }
-      });
-    });
+    const result = this.db.prepare(query).run(...this.bindArgs(params));
+    return { lastID: Number(result.lastInsertRowid), changes: Number(result.changes) };
   }
 
   async getRow(query, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.get(query, params, (error, row) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(row);
-        }
-      });
-    });
+    const row = this.db.prepare(query).get(...this.bindArgs(params));
+    return row ? { ...row } : undefined;
   }
 
   async getAllRows(query, params = []) {
-    return new Promise((resolve, reject) => {
-      this.db.all(query, params, (error, rows) => {
-        if (error) {
-          reject(error);
-        } else {
-          resolve(rows || []);
-        }
-      });
-    });
+    const rows = this.db.prepare(query).all(...this.bindArgs(params));
+    return rows.map((row) => ({ ...row }));
   }
 
   async close() {
     if (this.db) {
-      return new Promise((resolve) => {
-        this.db.close((error) => {
-          if (error) {
-            this.logger.error('Error closing database:', error);
-          }
-          resolve();
-        });
-      });
+      try {
+        this.db.close();
+      } catch (error) {
+        this.logger.error('Error closing database:', error);
+      }
+      this.db = null;
     }
   }
 
